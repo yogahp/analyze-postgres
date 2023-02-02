@@ -7,7 +7,7 @@ class AnalyzeJobService < BaseService
 
   def self.remove
     ActiveRecord::Base.connection.tables.each do |table_name|
-      Rails.cache.write("table_#{table_name}", false)
+      Rails.cache.delete("table_#{table_name}")
     end
   end
 end
