@@ -7,7 +7,7 @@ class AnalyzeJobService < BaseService
   end
 
   def self.remove
-    tables.each do |table_name|
+    current_tables.each do |table_name|
       Rails.cache.delete("table_#{table_name}")
     end
   end
