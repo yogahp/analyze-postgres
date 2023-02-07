@@ -1,6 +1,6 @@
 default: &default
   adapter: postgresql
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  pool: 350
   username: <%= ENV['RAILS_DB_USERNAME'] %>
   password: <%= ENV['RAILS_DB_PASSWORD'] %>
   host: <%= ENV['RAILS_DB_HOST'] %>
