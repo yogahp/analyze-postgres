@@ -26,4 +26,15 @@ class AnalyzeJobService < BaseService
   def self.current_tables
     ActiveRecord::Base.connection.tables
   end
+
+  def self.execute_whitelist
+    whitelist_tables.each do |table_name|
+      Pg::AnalyzeJob.perform_async(table_name)
+    end
+  end
+
+  def self.remaining_whitelist_tables
+    tables = Rails.cache.redis.keys('table_*').map { |table| table[6..-1] }
+    current_tables - tables
+  end
 end
