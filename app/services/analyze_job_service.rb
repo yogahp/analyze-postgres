@@ -1,11 +1,67 @@
 # frozen_string_literal: true
 
 class AnalyzeJobService < BaseService
-  def self.execute
-    tables = current_tables - whitelist_tables
-    tables.each do |table_name|
+  def self.big_tables
+    %w[order_product_scans orders internal_tools_logs downtime_tracker_logs order_products]
+  end
+
+  def self.mid_tables
+    %w[order_pipelines order_pipeline_packages order_deliveries courier_fees inventory_logs outbound_item_histories whatsapp_outbound_log order_ratings external_api_tokens outbound_items order_delivery_images order_product_ratings pick_list_order_product_items downtime_period_logs promo_whitelists otps order_fees inbound_items customers invoice_link_orders inbound_item_histories bca_va_payments warehouse_planogram_item_transfers forecast_same_day_deliveries order_live_tracking_summaries warehouse_planogram_outbound_items internal_shipment_items planogram_pick_list_order_products invoice_link_batches users verified_addresses warehouse_planogram_inbound_items courier_fee_histories warehouse_transfer_items customer_order_status_histories pick_list_order_products customer_addresses ab_test_clients freebie_promo_usages shopeepay_payments warehouse_planogram_outbounds inboxes invoice_links product_availability warehouse_transfer_logs pick_list_order_logs outbounds order_product_change_history warehouse_planogram_inbounds inventory_adjustment_documents_items inventory_adjustment inventory_recipients promos shareable_image_order_confirmations container_items customer_application_ratings pick_list_logs warehouse_transfer_order_product_scans product_catalog_promo_warehouses user_devices product_order_limit_tracker delivery_downtime_tracker_logs pick_lists credit_card_payment_logs promo_categories purchase_order_items product_catalog_promos warehouse_transfer_container_items segari_coin_transactions mission_reports goods_movement_staging_items inventory referrer_rewards pick_list_orders promo_min_purchase_categories pick_list_order_containers internal_shipments warehouse_planogram_item_transfer_sessions agent_commissions agent_receivable_transactions inventory_adjustment_document_planograms inbounds inventory_adjustment_documents agents warehouse_transfer_containers inbound_item_handling_units product_order_limits warehouse_planograms order_limits refunds quality_control_metrics warehouse_transfers containers purchase_orders promo_non_mixable_entries agent_payable_transactions refund_order_products products agent_price_group_products]
+  end
+
+  def self.small_tables
+    %w[favorites agent_workdays product_tag_products courier_attendances product_keywords late_order_status csv_rows agent_slugs inventory_warehouse_logs goods_movement_staging spatial_ref_sys warehouse_planogram_item_rules inbound_item_batches user_roles order_product_rating_details couriers cod_payment_batches automated_flash_sale_setting_warehouses container_towers agent_feature_flags agent_polygons cod_payments conversion_items purchasing_products recipes area_waiting_lists promo_products inventory_adjustment_document_schedulers inventory_adjustment_document_scheduler_items product_keyword_logs product_purchasing_products freebie_promo_allowed_lists conversion_template_items product_reviews customer_bank_accounts role_scopes promo_blacklists frontend_category_sortings payment_confirmations cod_payment_images recipe_item_products recipe_items courier_update_histories purchase_return_items universal_barcodes purchase_order_history_details goods_movement_whitelisted_planograms pricing_schedules shipping_points item_location_routes suppliers banners inventory_check_history_details csv conversions item_suggestion_unit_of_measures inbound_item_handling_unit_container_histories delivery_downtime_period_logs product_tags flyway_schema_history special_price_promo_constraints inventory_fulfillment_defects item_dimensions automated_flash_sale_setting_limits missions order_rating_details inventory_item_costs product_frontend_label_products conversion_templates goods_movement_staging_containers courier_devices automated_flash_sale_settings special_price_promo_constraint_category_groups product_suggestions purchase_returns product_details product_images supplier_onboard_documents freebie_promo_cart_constraint_category_groups supplier_delivery_days warehouse_planogram_items product_external_channels general_pick_lists frontend_subcategory_product_tags general_pick_list_item_requests frontend_subcategories goods_movement_handover_blacklists freebie_promos supplier_onboards scopes force_majeures warehouse_planogram_item_adjustments freebie_products special_price_promos special_price_promo_products popups freebie_promo_cart_constraint_product_groups mission_rewards frontend_category_group_frontend_categories districts thematic_widget_change_logs frontend_categories order_product_rating_options courier_punishments special_price_promo_non_mixable_entries inventory_planogram_rules freebie_promo_non_mixable_entries supplier_onboard_product_tags force_majeures_shipping_points freebie_promo_cart_constraints logistic_zones mission_goals managed_whatsapp_templates agent_summary_invoice_notes agent_summary_invoices ab_test_experiments categories agent_price_groups resources order_delivery_cancellations general_pick_list_item_actuals global_configs fulfillment_priorities goods_movement_planogram_rules product_availability_per_day shareable_images promo_events courier_types feature_flags force_majeure_confirmation_requests inbox_campaigns sdd_auto_assignment_global_config_shipping_points agent_sales_pics mission_goal_metric_requirements mission_goal_metrics frontend_category_frontend_subcategories warehouse_group_warehouses supplier_onboard_samples unit_of_measures warehouses thematic_widgets agent_type_commission_groups promo_special_price_products ab_test_variants regencies courier_punishment_types frontend_category_groups blacklisted_passwords payment_method_fees courier_holidays internal_tools_settings total_price_limit_whitelists flash_sale_widget_banners category_commission_groups order_queue_time_limit_global_configs minimum_spending_fees supplier_onboard_sample_items force_majeure_severities thematic_widget_talon_one_rule_mappings external_api_clients delivery_fee_warehouses delivery_fee_min_purchase_categories flash_sale_widget_warehouse_groups internal_tools_users thematic_widget_product_tags inventory_production_restocks product_frontend_labels force_majeure_types order_types versions signatures promo_types warehouse_groups fees order_rating_options roles sdd_auto_assignment_global_configs supplier_onboard_document_types referral_banners provinces mission_groups order_cancel_reasons payment_method_expirations commission_groups test_new_user_2 order_statuses agent_types failed_delivery_reasons planogram_functionalities email_blasts courier_fees_components allowed_phone_prefixes manual_curated_product_recommendation_group_products warehouse_active_hours test_new_user purchase_order_history inbound_signatures inventory_check_history customers_invoices mission_whitelists trucks manual_curated_product_recommendation_groups pick_list_daily_codes summary_invoices mission_blacklists commissions freebie_promo_blocked_lists product_user_subscriptions referral_program_banners delivery_fee_min_purchase_frontend_categories promo_labels product_taxes]
+  end
+
+  def self.execute_big_tables
+    big_tables.each do |table_name|
       Pg::AnalyzeJob.perform_async(table_name)
     end
+  end
+
+  def self.remove_big_tables
+    big_tables.each do |table_name|
+      Rails.cache.delete("table_#{table_name}")
+    end
+  end
+
+  def self.remaining_big_tables
+    tables = Rails.cache.redis.keys('table_*').map { |table| table[6..-1] }
+    (current_tables - big_tables) - tables
+  end
+
+  def self.execute_mid_tables
+    mid_tables.each do |table_name|
+      Pg::AnalyzeJob.perform_async(table_name)
+    end
+  end
+
+  def self.remove_mid_tables
+    mid_tables.each do |table_name|
+      Rails.cache.delete("table_#{table_name}")
+    end
+  end
+
+  def self.remaining_mid_tables
+    tables = Rails.cache.redis.keys('table_*').map { |table| table[6..-1] }
+    (current_tables - mid_tables) - tables
+  end
+
+  def self.execute_small_tables
+    small_tables.each do |table_name|
+      Pg::AnalyzeJob.perform_async(table_name)
+    end
+  end
+
+  def self.remove_small_tables
+    small_tables.each do |table_name|
+      Rails.cache.delete("table_#{table_name}")
+    end
+  end
+
+  def self.remaining_small_tables
+    tables = Rails.cache.redis.keys('table_*').map { |table| table[6..-1] }
+    (current_tables - small_tables) - tables
   end
 
   def self.remove
@@ -14,27 +70,7 @@ class AnalyzeJobService < BaseService
     end
   end
 
-  def self.remaining_tables
-    tables = Rails.cache.redis.keys('table_*').map { |table| table[6..-1] }
-    (current_tables - whitelist_tables) - tables
-  end
-
-  def self.whitelist_tables
-    %w[categories customers_invoices summary_invoices agent_summary_invoices commissions agent_summary_invoice_notes agent_commissions internal_tools_settings roles resources allowed_phone_prefixes agent_types inventory_check_history purchase_order_history purchase_order_history_details inventory_check_history_details inventory_item_costs feature_flags order_statuses order_types managed_whatsapp_templates order_cancel_reasons versions product_availability_per_day spatial_ref_sys category_commission_groups commission_groups provinces regencies email_blasts promo_special_price_products promo_events shareable_images courier_types conversions conversion_items external_api_clients total_price_limit_whitelists mission_groups mission_blacklists mission_whitelists freebie_promo_blocked_lists test_new_user test_new_user_2 order_rating_options promo_types warehouse_groups warehouse_group_warehouses referral_banners referral_program_banners pick_list_daily_codes fulfillment_priorities trucks fees flash_sale_widget_banners flash_sale_widget_warehouse_groups unit_of_measures planogram_functionalities general_pick_list_item_actuals agent_type_commission_groups payment_method_fees inventory_production_restocks delivery_fee_warehouses delivery_fee_min_purchase_categories delivery_fee_min_purchase_frontend_categories courier_holidays courier_fees_components order_delivery_cancellations frontend_category_groups signatures inbound_signatures courier_punishment_types courier_punishments minimum_spending_fees thematic_widget_product_tags sdd_auto_assignment_global_configs failed_delivery_reasons payment_method_expirations thematic_widget_talon_one_rule_mappings force_majeure_types force_majeure_severities supplier_onboard_document_types supplier_onboard_samples order_queue_time_limit_global_configs blacklisted_passwords promo_labels product_frontend_labels product_user_subscriptions product_images force_majeure_confirmation_requests]
-  end
-
   def self.current_tables
     ActiveRecord::Base.connection.tables
-  end
-
-  def self.execute_whitelist
-    whitelist_tables.each do |table_name|
-      Pg::AnalyzeJob.perform_async(table_name)
-    end
-  end
-
-  def self.remaining_whitelist_tables
-    tables = Rails.cache.redis.keys('table_*').map { |table| table[6..-1] }
-    current_tables - tables
   end
 end
